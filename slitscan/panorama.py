@@ -72,9 +72,12 @@ def process_video(
             flags=0,
         )
 
-        mean_flow_x = flow[..., 0].mean()
-        distance_acc += abs(mean_flow_x)
-        flow_x_total += mean_flow_x
+        # Use the median flow to emphasise background motion and
+        # reduce the impact of fast moving foreground objects which can
+        # otherwise compress the panorama due to parallax.
+        median_flow_x = np.median(flow[..., 0])
+        distance_acc += abs(median_flow_x)
+        flow_x_total += median_flow_x
         frame_count += 1
 
         if distance_acc >= strip_spacing:
