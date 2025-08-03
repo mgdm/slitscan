@@ -1,3 +1,12 @@
+"""Panorama construction using optical flow and robust motion estimation.
+
+The module estimates camera motion between consecutive frames using
+``cv2.calcOpticalFlowFarneback`` followed by a RANSAC-based affine transform
+fit.  RANSAC is employed to reject outlier flow vectors, such as those
+originating from independently moving objects, providing a more stable
+translation estimate for panorama generation.
+"""
+
 import cv2
 import numpy as np
 from dataclasses import dataclass
@@ -72,10 +81,20 @@ def process_video(
             flags=0,
         )
 
-        mean_flow_x = flow[..., 0].mean()
-        distance_acc += abs(mean_flow_x)
-        flow_x_total += mean_flow_x
+        h, w = prev_gray.shape
+        y, x = np.mgrid[0:h, 0:w]
+        prev_pts = np.stack((x, y), axis=-1).reshape(-1, 2).astype(np.float32)
+        next_pts = prev_pts + flow.reshape(-1, 2)
+        M, _ = cv2.estimateAffinePartial2D(prev_pts, next_pts, method=cv2.RANSAC)
+        if M is None:
+            prev_gray = gray
+            continue
+
+        dx = float(M[0, 2])
+        distance_acc += abs(dx)
+        flow_x_total += dx
         frame_count += 1
+        print(f"Processed frame {frame_count}")
 
         if distance_acc >= strip_spacing:
             x = width // 2
